@@ -1,0 +1,172 @@
+---
+title: "Pitch dataviz"
+author: "Sylvain Lapoix (Datactivist)"
+date: "27/11/2020"
+output: pdf_document
+---
+  
+  
+```{r setup, include=FALSE, results='hide', message=FALSE, warning=FALSE}
+
+knitr::opts_chunk$set(echo=FALSE,
+                      warning=FALSE,
+                      message=FALSE)
+
+options(knitr.kable.NA = '')
+
+library(tidyverse)
+library(httr)
+library(RColorBrewer)
+library(ggrepel)
+library(sf)
+library(tmap)
+library(tmaptools)
+
+vert_correze <- "#7cb24d"
+background_correze <- "#455a63"
+
+```
+
+## Réseaux
+
+### Exemple de données utilisables: l'Observatoire des déploiements des réseaux et services fixes
+
+Conformément à [la décision n°2012-1503](https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000027138496) relative à la collecte d'informations concernant lesm archés du haut débit fixe et du très haut débit fixe, l'Autorité de régulation des communications électroniques et des postes (Arcep) publie chaque trimestre les données détaillées du niveau de raccordement à Internet à l'échelle de l'immeuble.
+
+*Dans le cadre de nos analyses*, [l'Observatoire des déploiements des réseaux et services fixes](https://www.data.gouv.fr/en/datasets/le-marche-du-haut-et-tres-haut-debit-fixe-deploiements/) constitue une source importante de données sur la couverture du territoire corrézien en Internet fibre et mobile, la qualité des services en question, les dispositifs de lutte contre la fracture numérique ...
+
+
+```{r thd_arcep}
+
+# source cantons : https://www.correze.gouv.fr/Publications/Cartes-et-donnees/Des-cartes-thematiques/Services-publics-et-limites-administratives/Limites-des-cantons-Correziens
+
+cantons19 <- readxl::read_excel("./data/Communes_cantons_2016.xls", "Feuille1") %>% 
+  mutate(NOM = case_when(str_detect(NOM, "^Brive") ~ "Brive",
+                         TRUE ~ NOM))
+
+# source THD : Arcep https://www.data.gouv.fr/en/datasets/le-marche-du-haut-et-tres-haut-debit-fixe-deploiements/
+
+
+thd_co_19 <- readxl::read_excel("./numerique/data/2020t3-obs-hd-thd-deploiement.xlsx",
+                             sheet = "Communes", skip = 4) %>% 
+  dplyr::select(-starts_with("...")) %>% 
+  filter(`Code département` == "19") %>% 
+  left_join(dplyr::select(cantons19, c("INSEE_COMM", "NOM")),
+                     by = c("Code commune" = "INSEE_COMM")) %>% 
+  rename(canton = NOM,
+         locaux_estim = `Meilleure estimation des locaux à date`, 
+         deploiement2020T3 = `T3 2020`)
+
+thd_co_19 %>% group_by(canton) %>%
+  summarize(couverture2020T3 = sum(deploiement2020T3) / sum(locaux_estim),
+            n = n(), .groups = "keep") %>% 
+  ggplot() +
+  geom_col(aes(x = reorder(canton, couverture2020T3),
+               y = couverture2020T3),
+           fill = vert_correze) +
+    coord_flip() +
+  labs(title="Couverture réseau en fibre jusqu'à l'abonné",
+       subtitle = "part des établissements raccordés agrégée par canton (2020T3)",
+       caption = "Source: Observatoire des déploiements des réseaux et services fixes, Arcep, décembre 2020") +
+    theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        legend.position = "none",
+        panel.background = element_rect(fill = "#546e7a"),
+        plot.background = element_rect(fill = "#546e7a"),
+        text = element_text(color = "white"),
+        axis.text.y = element_text(color = "white")
+        ) +
+  ylim(0,1) +
+  geom_text(aes(label = paste0(round(couverture2020T3 * 100, digits = 2), " %"),
+                x = canton,
+                y = couverture2020T3 + .05),
+            size = 3, colour = "white",family="Helvetica")
+
+```
+
+\newpage
+
+## Transition écologique
+
+### Exemple de données utilisables: fichier consolidé des bornes de recharge pour véhicules électriques
+
+Le [décret n°2017-26](https://www.legifrance.gouv.fr/jorf/id/JORFTEXT000033860620/) relatif aux infrastructures de recharge pour véhicules électriques a instauré l'obligation de publication des données relatives à la localisation géographique et aux caractéristiques techniques des stations et points de recharge de véhicules électriques ouverts au public sur data.gouv.fr.
+
+*Dans le cadre de nos analyses*, le [fichier des bornes de recharge pour véhicules électriques](https://www.data.gouv.fr/fr/datasets/fichier-consolide-des-bornes-de-recharge-pour-vehicules-electriques/) consolidé par Etalab permet de cartographier et documenter les caractéristiques techniques des bornes présentes sur le territoire du département afin d'évaluer cet aspect des politiques de mobilité bas carbone.
+
+
+```{r data_irve, results=FALSE}
+bornes <- read_csv2("https://www.data.gouv.fr/fr/datasets/r/50625621-18bd-43cb-8fde-6b8c24bdabb3") %>%
+  filter(str_detect(code_insee, "^19")) %>% 
+  left_join(dplyr::select(cantons19, c("INSEE_COMM", "NOM")),
+            by = c("code_insee" = "INSEE_COMM"))
+
+
+bornes_geo <- bornes %>% mutate(x = as.double(Xlongitude),
+  y = as.double(
+    paste0(str_extract(Ylatitude, "^\\d{2}"), ".", str_replace(Ylatitude, "^\\d{2}", ""))
+    )) %>% count(x, y) %>% 
+  st_as_sf(coords = c("x", "y"))
+
+correze_contour <- st_read("./data/geofla_19/geoflar-departements.shp")
+osm_correze <- read_osm(correze_contour)
+
+tmap_mode("plot")
+
+
+tm_shape(osm_correze) + tm_rgb() +
+  tm_shape(correze_contour) +
+  tm_polygons(alpha = .2, col = vert_correze) +
+  tm_shape(bornes_geo) +
+  tm_dots(size = 0.2, col = c("blue")) +
+  tm_text(auto.placement = TRUE, text = "n")
+
+```
+
+
+\newpage
+
+## Santé
+
+### Exemple de données utilisables: annuaire santé de la Caisse nationale d'assurance maladie
+
+Au titre de sa mission générale d'information des assuré·es, la Caisse nationale d'assurance maladie publie la liste des professionnels de santé exerçant en France avec les informations pratiques et techniques qui le concerne : profession, lieu d'exercice, actes pratiqués, convention et modalité de transmission à l'assurance maladie.
+
+*Dans le cadre de nos analyses*, [l'annuaire santé de la Cnam](https://www.data.gouv.fr/fr/datasets/annuaire-sante-de-la-cnam/) représente une ressource clef pour évaluer la couverture médicale de la Corrèze, que ce soit sur le plan de la démographie médicale, de l'accessibilité des soins, de l'offre de soin sur le territoire ou des tarfis pratiqués.
+
+```{r medecins_densite}
+
+medecins <- read_csv2("./data/annuaire_sante.csv")
+
+medecins %>% mutate(code_insee = as.character(code_insee),
+                    # on factor lump Profession pour ne garder que les top 6
+                    Profession = fct_lump(Profession, 6, other_level = "Autres")) %>% 
+    left_join(dplyr::select(cantons19, c("INSEE_COMM", "NOM")),
+            by = c("code_insee" = "INSEE_COMM")) %>% 
+  count(NOM,Profession) %>% setNames(c("canton","pratique","n")) %>% 
+  add_count(canton, wt = n, name = "total") %>% 
+  ggplot() +
+  geom_col(aes(x= reorder(canton, total), y = n, fill = pratique)) +
+  coord_flip() +
+    labs(title="Démographie des professionel·les de santé",
+       subtitle = "nombre de praticien·nes agrégés par canton et par pratique",
+       caption = "Source: Annuaire Santé, CNAM, janvier 2021") +
+  theme(panel.grid.major.x = element_line(colour = "grey"),
+        panel.grid.minor = element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.x=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.title.y=element_blank(),
+        panel.background = element_rect(fill = "#f2f2f2"),
+        plot.background = element_rect(fill = "#f2f2f2")) +
+  scale_y_continuous(breaks = c(0,500,1000,5000), limits = c(0,5000),
+                     labels = c(0,500,1000,5000))
+
+
+```
+
