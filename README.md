@@ -31,7 +31,7 @@ Arcep
 ### Orientation 3
 
 * Registre de covoiturage
-* ARVE (à vérifier)
+* IRVE
 
 ### Orientation 4
 * Pour le moment manque d'idées
@@ -44,3 +44,34 @@ Données ARS ?
 https://www.sigena.fr/geonetwork/srv/fre/catalog.search#/search?resultType=details&sortBy=relevance&any=sant%C3%A9&fast=index&_content_type=json&from=1&to=20
 
 Données INSEE (services d’urgence, médecin généraliste, dentistes, infirmiers, kiné, pharmacie, équipement personnes agées) ?
+
+------
+
+# Axes d'étude retenus
+
+## Introduction : socio-démographie d'une Corrèze qui change
+
+* vieillissement ;
+* diversité du territoire ;
+* autres faits notables ?
+
+
+## Axe 1 : numérique
+
+* Orientation zone blanche : THD et cie.
+
+
+## Axe 2 : transition écologique
+
+* IRVE (cf. étude stratégie 19) ;
+* Energie hydraulique ;
+* Méthanisation ;
+* Logement sous l'angle DD (cf. étude Wavestone).
+
+
+## Axe 3 : santé et soin
+
+* démographie médicale ;
+* équipement de soin ;
+* vieillissement face à l'offre de soin et services médicaux à la personne ;
+* attractivité pour le personnel médico-social.
